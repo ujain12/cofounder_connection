@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: nice default background + text for dark theme */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #0a0a0a;
+  color: #ededed;
+}
