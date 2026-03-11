@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import Link from "next/link";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -34,8 +34,16 @@ export default function AppShell({
       <header className="border-b border-zinc-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
-            <Link href="/" className="text-lg font-semibold">
-              Cofounder Connection
+          
+            <Link href="/" className="flex items-center gap-3">
+             <Image
+              src="/images/logo.png"
+              alt="Cofounder Connection Logo"
+              width={44}
+              height={44}
+              className="rounded-md"
+              />
+              <span className="font-semibold text-lg">Cofounder Connection</span>
             </Link>
 
             {user && (
@@ -51,6 +59,12 @@ export default function AppShell({
                 </Link>
                 <Link href="/ai" className="hover:text-white">
                 AI
+                </Link>
+
+                <Link href="/workspace">
+                
+                Workspace
+                
                 </Link>
 
               </div>

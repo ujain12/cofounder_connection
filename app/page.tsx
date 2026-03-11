@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "./components/AppShell";
@@ -49,7 +49,15 @@ export default function Home() {
           <div className="w-full max-w-md">
             <div className="mb-6 text-center">
               <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500" />
-              <h1 className="text-2xl font-semibold">Cofounder Connection</h1>
+              <div className="flex justify-center mb-6">
+              <Image
+              src="/images/logo.png"
+              alt="Cofounder Connection Logo"
+              width={600}
+              height={600}
+              className="rounded-xl"
+              />
+              </div>
               <p className="mt-2 text-sm text-zinc-400">
                 Create accounts to test matching, requests, and chat.
               </p>

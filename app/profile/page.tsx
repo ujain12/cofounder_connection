@@ -39,19 +39,47 @@ const MODELS: Record<Provider, { id: string; label: string }[]> = {
   ],
 };
 
+type EnhanceResponse = {
+  bio?: string;
+  goals?: string;
+  stage?: string;
+  timezone?: string;
+  hours_per_week?: number | null;
+  summary?: string[];
+};
+
+type MissingItem = {
+  field: "bio" | "goals" | "stage" | "timezone" | "hours_per_week";
+  reason: string;
+  suggestion: string;
+};
+
+type MissingResponse = {
+  missing?: MissingItem[];
+  suggested_fields?: {
+    bio?: string;
+    goals?: string;
+    stage?: string;
+    timezone?: string;
+    hours_per_week?: number | null;
+  };
+  overall_feedback?: string[];
+};
+
 export default function ProfilePage() {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [profile, setProfile] = useState<Profile>(emptyProfile);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // AI state
   const [provider, setProvider] = useState<Provider>("openai");
   const [model, setModel] = useState(MODELS.openai[0].id);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiOut, setAiOut] = useState("");
   const [aiMode, setAiMode] = useState<"enhance" | "missing">("enhance");
+
+  const [enhanceData, setEnhanceData] = useState<EnhanceResponse | null>(null);
+  const [missingData, setMissingData] = useState<MissingResponse | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -63,7 +91,11 @@ export default function ProfilePage() {
         return;
       }
 
-      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (data) {
         setProfile({
@@ -99,7 +131,11 @@ export default function ProfilePage() {
 
     setSaving(false);
 
-    if (error) return alert("Error: " + error.message);
+    if (error) {
+      alert("Error: " + error.message);
+      return;
+    }
+
     alert("Profile saved ✅");
   }
 
@@ -111,81 +147,98 @@ export default function ProfilePage() {
   async function runAI(kind: "enhance" | "missing") {
     setAiMode(kind);
     setAiOut("");
+    setEnhanceData(null);
+    setMissingData(null);
     setAiBusy(true);
 
-    const feature = kind === "enhance" ? "profile_enhance" : "profile_missing";
+    const task = kind === "enhance" ? "rewrite_profile" : "profile_missing";
 
-    const r = await fetch("/api/ai/context", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, model, feature }),
-    });
+    try {
+      const r = await fetch("/api/ai/context", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider,
+          model,
+          task,
+          payload: profile,
+        }),
+      });
 
-    const j = await r.json();
-    setAiBusy(false);
+      const j = await r.json();
+      setAiBusy(false);
 
-    if (!j.ok) return alert(j.error || "AI failed");
-    setAiOut(j.output_text || "");
-  }
-
-  function applyBioFromAI() {
-    // Very simple: take first “Improved Bio” paragraph if present
-    // If not, just apply whole output.
-    const text = aiOut.trim();
-    if (!text) return;
-
-    // try to extract line after "Improved Bio"
-    const idx = text.toLowerCase().indexOf("improved bio");
-    if (idx >= 0) {
-      const slice = text.slice(idx);
-      const lines = slice.split("\n").map((l) => l.trim()).filter(Boolean);
-      // pick next non-title line
-      const candidate = lines.find((l) => !l.toLowerCase().includes("improved bio") && l.length > 20);
-      if (candidate) {
-        setProfile((p) => ({ ...p, bio: candidate }));
+      if (!j.ok) {
+        alert(j.error || "AI failed");
         return;
       }
-    }
 
-    setProfile((p) => ({ ...p, bio: text.slice(0, 500) }));
+      setAiOut(j.output_text || "");
+
+      if (kind === "enhance") {
+        setEnhanceData(j.parsed ?? null);
+      } else {
+        setMissingData(j.parsed ?? null);
+      }
+    } catch (error) {
+      setAiBusy(false);
+      alert("AI request failed.");
+      console.error(error);
+    }
   }
 
-  if (loading) return <main className="p-10">Loading...</main>;
+  function applyField(
+    field: keyof Pick<Profile, "bio" | "goals" | "stage" | "timezone" | "hours_per_week">,
+    value: string | number | null | undefined
+  ) {
+    if (value === undefined) return;
+    setProfile((prev) => ({
+      ...prev,
+      [field]: value as never,
+    }));
+  }
+
+  if (loading) {
+    return <div className="p-8 text-white">Loading...</div>;
+  }
 
   return (
-    <main className="p-10 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">My Profile</h1>
-        <Link className="text-sm text-zinc-400 hover:text-white" href="/">
+    <main className="mx-auto max-w-5xl p-6 text-white">
+      <div className="mb-6">
+        <Link href="/" className="text-sm text-zinc-400 hover:text-white">
           ← Home
         </Link>
       </div>
 
-      <div className="grid gap-3">
+      <h1 className="text-4xl font-bold mb-6">My Profile</h1>
+
+      <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
         <input
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3"
-          placeholder="Full Name"
+          className="w-full rounded-xl border border-zinc-800 bg-black p-3"
+          placeholder="Full name"
           value={profile.full_name}
           onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
         />
 
         <textarea
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 h-28"
-          placeholder="Bio"
+          className="w-full rounded-xl border border-zinc-800 bg-black p-3 h-32"
+          placeholder="Description / Bio"
           value={profile.bio}
           onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+            className="w-full rounded-xl border border-zinc-800 bg-black p-3"
             placeholder="Timezone"
             value={profile.timezone}
             onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
           />
 
           <input
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+            className="w-full rounded-xl border border-zinc-800 bg-black p-3"
             type="number"
             placeholder="Hours per week"
             value={profile.hours_per_week ?? ""}
@@ -199,14 +252,14 @@ export default function ProfilePage() {
         </div>
 
         <input
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+          className="w-full rounded-xl border border-zinc-800 bg-black p-3"
           placeholder="Stage"
           value={profile.stage}
           onChange={(e) => setProfile({ ...profile, stage: e.target.value })}
         />
 
         <textarea
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 h-24"
+          className="w-full rounded-xl border border-zinc-800 bg-black p-3 h-24"
           placeholder="Goals"
           value={profile.goals}
           onChange={(e) => setProfile({ ...profile, goals: e.target.value })}
@@ -215,16 +268,15 @@ export default function ProfilePage() {
         <button
           onClick={saveProfile}
           disabled={saving}
-          className="rounded-xl bg-white text-black py-3 font-semibold hover:opacity-90 disabled:opacity-50"
+          className="rounded-xl bg-white text-black py-3 px-4 font-semibold hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save Profile"}
         </button>
       </div>
 
-      {/* AI Profile Tools */}
       <div className="mt-10 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">AI Profile Tools</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-semibold">AI Profile Tools</h2>
 
           <div className="flex items-center gap-2">
             <select
@@ -267,20 +319,169 @@ export default function ProfilePage() {
           >
             {aiBusy && aiMode === "missing" ? "Running..." : "What am I missing?"}
           </button>
-
-          <button
-            onClick={applyBioFromAI}
-            disabled={!aiOut.trim()}
-            className="rounded-xl bg-zinc-800 px-4 py-2 hover:bg-zinc-700 disabled:opacity-50"
-          >
-            Apply Bio
-          </button>
         </div>
 
-        <div className="mt-4 whitespace-pre-wrap text-sm text-zinc-200">
-          {aiOut ? aiOut : <span className="text-zinc-500">Run a tool to see output here.</span>}
+        {enhanceData && (
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-black p-4 space-y-4">
+            <h3 className="text-lg font-semibold">Enhanced Suggestions</h3>
+
+            {enhanceData.summary?.length ? (
+              <ul className="list-disc pl-5 text-sm text-zinc-300">
+                {enhanceData.summary.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <SuggestionCard
+              label="Description / Bio"
+              value={enhanceData.bio}
+              onApply={() => applyField("bio", enhanceData.bio)}
+            />
+
+            <SuggestionCard
+              label="Goals"
+              value={enhanceData.goals}
+              onApply={() => applyField("goals", enhanceData.goals)}
+            />
+
+            <SuggestionCard
+              label="Stage"
+              value={enhanceData.stage}
+              onApply={() => applyField("stage", enhanceData.stage)}
+            />
+
+            <SuggestionCard
+              label="Timezone"
+              value={enhanceData.timezone}
+              onApply={() => applyField("timezone", enhanceData.timezone)}
+            />
+
+            <SuggestionCard
+              label="Hours per week"
+              value={
+                enhanceData.hours_per_week !== undefined &&
+                enhanceData.hours_per_week !== null
+                  ? String(enhanceData.hours_per_week)
+                  : undefined
+              }
+              onApply={() => applyField("hours_per_week", enhanceData.hours_per_week ?? null)}
+            />
+          </div>
+        )}
+
+        {missingData && (
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-black p-4 space-y-4">
+            <h3 className="text-lg font-semibold">Missing or Weak Areas</h3>
+
+            {missingData.overall_feedback?.length ? (
+              <ul className="list-disc pl-5 text-sm text-zinc-300">
+                {missingData.overall_feedback.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            {missingData.missing?.length ? (
+              <div className="space-y-3">
+                {missingData.missing.map((item, idx) => (
+                  <div key={idx} className="rounded-xl border border-zinc-800 p-4">
+                    <p className="font-medium capitalize">{item.field}</p>
+                    <p className="text-sm text-zinc-400 mt-1">{item.reason}</p>
+                    <p className="text-sm text-zinc-200 mt-3 whitespace-pre-wrap">
+                      {item.suggestion}
+                    </p>
+                    <button
+                      onClick={() =>
+                        applyField(
+                          item.field,
+                          item.field === "hours_per_week"
+                            ? Number(item.suggestion) || profile.hours_per_week
+                            : item.suggestion
+                        )
+                      }
+                      className="mt-3 rounded-lg bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+                    >
+                      Apply to {item.field}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3">
+              <SuggestionCard
+                label="Suggested Description / Bio"
+                value={missingData.suggested_fields?.bio}
+                onApply={() => applyField("bio", missingData.suggested_fields?.bio)}
+              />
+
+              <SuggestionCard
+                label="Suggested Goals"
+                value={missingData.suggested_fields?.goals}
+                onApply={() => applyField("goals", missingData.suggested_fields?.goals)}
+              />
+
+              <SuggestionCard
+                label="Suggested Stage"
+                value={missingData.suggested_fields?.stage}
+                onApply={() => applyField("stage", missingData.suggested_fields?.stage)}
+              />
+
+              <SuggestionCard
+                label="Suggested Timezone"
+                value={missingData.suggested_fields?.timezone}
+                onApply={() => applyField("timezone", missingData.suggested_fields?.timezone)}
+              />
+
+              <SuggestionCard
+                label="Suggested Hours per week"
+                value={
+                  missingData.suggested_fields?.hours_per_week !== undefined &&
+                  missingData.suggested_fields?.hours_per_week !== null
+                    ? String(missingData.suggested_fields.hours_per_week)
+                    : undefined
+                }
+                onApply={() =>
+                  applyField(
+                    "hours_per_week",
+                    missingData.suggested_fields?.hours_per_week ?? null
+                  )
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 whitespace-pre-wrap text-sm text-zinc-400">
+          {aiOut ? aiOut : "Run a tool to see AI output here."}
         </div>
       </div>
     </main>
+  );
+}
+
+function SuggestionCard({
+  label,
+  value,
+  onApply,
+}: {
+  label: string;
+  value?: string;
+  onApply: () => void;
+}) {
+  if (!value) return null;
+
+  return (
+    <div className="rounded-xl border border-zinc-800 p-4">
+      <p className="text-sm font-medium text-zinc-300">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-100">{value}</p>
+      <button
+        onClick={onApply}
+        className="mt-3 rounded-lg bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+      >
+        Apply to {label}
+      </button>
+    </div>
   );
 }
