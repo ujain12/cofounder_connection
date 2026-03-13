@@ -1,14 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: nice default background + text for dark theme */
-html,
-body {
-  height: 100%;
+/* ================================================================
+   COFOUNDER CONNECTION — globals.css
+   This file sets the foundation. Components are styled in ui.tsx
+   and individual page files — not overridden here.
+================================================================ */
+
+:root {
+  --bg:       #07080f;
+  --sidebar:  232px;
 }
 
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
 body {
-  background: #0a0a0a;
-  color: #ededed;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: #eef0f6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Ambient background ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 600px at -5% -10%, rgba(99,102,241,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 700px 500px at 105% 110%, rgba(124,58,237,0.09) 0%, transparent 55%);
+  animation: bgShift 25s ease-in-out infinite alternate;
+}
+/* ── Dot grid ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 100%);
+}
+@keyframes bgShift {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.6; transform: scale(1.06) translateY(-12px); }
+}
+
+/* Everything sits above the bg */
+#__next > * { position: relative; z-index: 1; }
+
+/* ── Fonts ── */
+h1,h2,h3,h4,h5,h6 {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 9999px; }
+
+/* ── SIDEBAR ── */
+.nav-sidebar {
+  position: fixed; top: 0; left: 0;
+  height: 100vh; width: var(--sidebar);
+  background: rgba(7,8,15,0.97);
+  border-right: 1px solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  display: flex; flex-direction: column;
+  z-index: 100; overflow: hidden;
+}
+
+.nav-logo-wrap {
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+/* LOGO FIX — always bounded, never overflows */
+.nav-logo-wrap img {
+  display: block !important;
+  width: 140px !important;
+  max-width: 140px !important;
+  height: auto !important;
+  max-height: 42px !important;
+  object-fit: contain !important;
+}
+.nav-tagline {
+  font-size: 10px;
+  color: #475569;
+  letter-spacing: 0.04em;
+  margin-top: 5px;
+}
+
+.nav-body {
+  flex: 1; overflow-y: auto; padding: 10px;
+}
+.nav-section-label {
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #475569; padding: 0 8px;
+  margin: 10px 0 4px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  font-size: 13.5px; font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  margin-bottom: 1px;
+  text-decoration: none;
+  width: 100%; background: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.nav-item:hover {
+  color: #eef0f6;
+  background: rgba(99,102,241,0.08);
+  border-color: rgba(99,102,241,0.14);
+}
+.nav-item.active {
+  color: #a5b4fc;
+  background: rgba(99,102,241,0.13);
+  border-color: rgba(99,102,241,0.24);
+}
+.nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.nav-dot {
+  margin-left: auto; width: 5px; height: 5px;
+  border-radius: 50%; background: #818cf8;
+  box-shadow: 0 0 8px rgba(129,140,248,0.8);
+  flex-shrink: 0;
+}
+.nav-footer {
+  padding: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+
+/* ── MAIN AREA ── */
+.main-content {
+  margin-left: var(--sidebar);
+  min-height: 100vh;
+  padding: 28px 32px;
+  position: relative; z-index: 1;
+}
+
+/* ── PAGE TITLES ── */
+.page-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #eef0f6 30%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 24px;
+  display: block;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.anim-up { animation: fadeUp 0.4s ease both; }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  :root { --sidebar: 0px; }
+  .nav-sidebar {
+    position: fixed; bottom: 0; top: auto;
+    left: 0; right: 0; width: 100%; height: 58px;
+    flex-direction: row; align-items: center;
+    padding: 0 8px; border-right: none;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    overflow-x: auto; overflow-y: hidden;
+  }
+  .nav-logo-wrap, .nav-section-label, .nav-footer { display: none; }
+  .nav-body { display: flex; flex-direction: row; overflow: visible; padding: 0; }
+  .nav-item { flex-direction: column; gap: 2px; padding: 6px 10px; font-size: 10px; min-width: 52px; text-align: center; border-radius: 8px; margin: 0; }
+  .nav-icon { width: 18px; height: 18px; }
+  .nav-dot { display: none; }
+  .main-content { margin-left: 0; padding: 16px; padding-bottom: 72px; }
 }
