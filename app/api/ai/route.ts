@@ -12,126 +12,127 @@ type Task =
   | "opener"
   | "coach";
 
-type ProfilePayload = {
-  full_name?: string;
+type Payload = {
+  question?: string;
   bio?: string;
+  full_name?: string;
   timezone?: string;
   hours_per_week?: number | null;
   stage?: string;
   goals?: string;
+  me?: any;
+  other?: any;
+  transcript?: string;
 };
 
-function safeJson(obj: unknown, maxChars = 12000) {
+function safeJson(obj: unknown, maxChars = 8000) {
   const s = JSON.stringify(obj, null, 2);
-  if (s.length <= maxChars) return s;
-  return s.slice(0, maxChars) + "\n...(truncated)";
+  return s.length <= maxChars ? s : s.slice(0, maxChars) + "\n...(truncated)";
 }
 
-function buildPrompt(task: Task, profile: ProfilePayload) {
-  const profileBlock = safeJson(profile);
+function buildPrompt(task: Task, payload: Payload): string {
+  if (task === "chatbot") {
+    const q = (payload.question ?? "").trim();
+    return `You are the Cofounder Connection AI — an expert on startups, cofounder relationships, equity splits, product strategy, and early-stage company building.
+
+Answer the following question in a helpful, specific, and direct way. Use bullet points or numbered lists where useful. Be practical and actionable.
+
+QUESTION:
+${q || "Tell me something useful about finding a cofounder."}`;
+  }
 
   if (task === "rewrite_profile") {
-    return `
-You are helping a founder improve their cofounder-matching profile.
-
-Use the CURRENT PROFILE below as the source of truth.
-Do not invent random background details.
-Only improve clarity, specificity, and attractiveness for cofounder matching.
-If a field is blank, suggest a strong but generic version that fits the rest of the profile.
+    return `You are helping a founder improve their cofounder-matching profile. Only improve what exists — do not invent details.
 
 CURRENT PROFILE:
-${profileBlock}
+${safeJson(payload)}
 
-Return ONLY valid JSON in this exact shape:
+Return ONLY valid JSON:
 {
-  "bio": "improved bio text",
-  "goals": "improved goals text",
-  "stage": "improved startup stage text",
-  "timezone": "improved timezone text or existing timezone",
+  "bio": "improved bio",
+  "goals": "improved goals",
+  "stage": "improved stage",
+  "timezone": "timezone",
   "hours_per_week": 10,
-  "summary": [
-    "short note 1",
-    "short note 2",
-    "short note 3"
-  ]
-}
-`;
+  "summary": ["note 1", "note 2", "note 3"]
+}`;
   }
 
   if (task === "profile_missing") {
-    return `
-You are reviewing a founder profile for missing or weak areas.
-
-Use the CURRENT PROFILE below as the source of truth.
-Do not invent random details.
-Identify what is missing, too vague, or weak for cofounder matching.
-For each weak or missing field, suggest a better replacement.
+    return `You are reviewing a founder profile for weak or missing areas.
 
 CURRENT PROFILE:
-${profileBlock}
+${safeJson(payload)}
 
-Return ONLY valid JSON in this exact shape:
+Return ONLY valid JSON:
 {
-  "missing": [
-    {
-      "field": "bio",
-      "reason": "why this is weak or missing",
-      "suggestion": "better text for that field"
-    }
-  ],
-  "suggested_fields": {
-    "bio": "optional improved bio",
-    "goals": "optional improved goals",
-    "stage": "optional improved stage",
-    "timezone": "optional improved timezone",
-    "hours_per_week": 10
-  },
-  "overall_feedback": [
-    "short feedback 1",
-    "short feedback 2",
-    "short feedback 3"
-  ]
-}
-`;
+  "missing": [{"field": "bio", "reason": "why weak", "suggestion": "better text"}],
+  "suggested_fields": {"bio": "...", "goals": "...", "stage": "...", "timezone": "...", "hours_per_week": 10},
+  "overall_feedback": ["feedback 1", "feedback 2", "feedback 3"]
+}`;
   }
 
-  return `
-You are the Cofounder Connection assistant.
-Answer helpfully and briefly.
-`;
+  if (task === "match_explain") {
+    return `You are a cofounder matching expert.
+
+Explain in 4-5 sentences why these two founders could be a strong match. Be specific about complementary skills, shared goals, and potential synergies. End with one honest challenge they should discuss early.
+
+FOUNDER (YOU):
+${safeJson(payload.me ?? {})}
+
+POTENTIAL COFOUNDER:
+${safeJson(payload.other ?? {})}`;
+  }
+
+  if (task === "opener") {
+    return `You are a startup networking expert.
+
+Write a short, warm, personalized connection message (3-4 sentences) from Founder A to Founder B. Reference something specific from their profile. End with a clear, low-pressure call to action.
+
+FOUNDER A (you):
+${safeJson(payload.me ?? {})}
+
+FOUNDER B (recipient):
+${safeJson(payload.other ?? {})}`;
+  }
+
+  if (task === "coach") {
+    return `You are a startup communication coach reviewing a conversation between two potential cofounders.
+
+Give 3 specific, actionable suggestions to help them communicate better, build trust, and make progress. Be direct and practical.
+
+CONVERSATION TRANSCRIPT:
+${payload.transcript || "(no messages yet — suggest how to start the conversation)"}`;
+  }
+
+  return `You are the Cofounder Connection AI assistant. Answer helpfully.\n\n${safeJson(payload)}`;
 }
 
 async function callOpenAI(model: string, prompt: string) {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const res = await client.responses.create({
+  const res = await client.chat.completions.create({
     model,
-    input: prompt,
+    max_tokens: 1200,
+    messages: [{ role: "user", content: prompt }],
   });
-
-  return { text: res.output_text ?? "" };
+  return { text: res.choices[0]?.message?.content ?? "" };
 }
 
 async function callAnthropic(model: string, prompt: string) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const msg = await client.messages.create({
     model,
     max_tokens: 1200,
     messages: [{ role: "user", content: prompt }],
   });
-
-  const text =
-    (msg.content || [])
-      .map((b: any) => (b.type === "text" ? b.text : ""))
-      .join("") || "";
-
+  const text = (msg.content || [])
+    .map((b: any) => (b.type === "text" ? b.text : ""))
+    .join("");
   return { text };
 }
 
 async function callHF(model: string, prompt: string) {
   const url = `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
-
   const r = await fetch(url, {
     method: "POST",
     headers: {
@@ -140,39 +141,23 @@ async function callHF(model: string, prompt: string) {
     },
     body: JSON.stringify({
       inputs: prompt,
-      parameters: {
-        max_new_tokens: 600,
-        return_full_text: false,
-      },
+      parameters: { max_new_tokens: 600, return_full_text: false },
     }),
   });
-
   const json = await r.json();
-
   let text = "";
-  if (Array.isArray(json) && json[0]?.generated_text) {
-    text = json[0].generated_text;
-  } else if (typeof json === "object" && json?.generated_text) {
-    text = json.generated_text;
-  } else {
-    text = JSON.stringify(json);
-  }
-
+  if (Array.isArray(json) && json[0]?.generated_text) text = json[0].generated_text;
+  else if (json?.generated_text) text = json.generated_text;
+  else text = JSON.stringify(json);
   return { text };
 }
 
 function tryParseJson(raw: string) {
-  try {
-    return JSON.parse(raw);
-  } catch {
+  try { return JSON.parse(raw); } catch {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(raw.slice(start, end + 1));
-      } catch {
-        return null;
-      }
+      try { return JSON.parse(raw.slice(start, end + 1)); } catch { return null; }
     }
     return null;
   }
@@ -184,44 +169,33 @@ export async function POST(req: Request) {
 
     const provider = (body.provider as Provider) || "openai";
     const model = (body.model as string) || "gpt-4o-mini";
-    const task = (body.task as Task) || "rewrite_profile";
+    const task = (body.task as Task) || "chatbot";
 
     const supabase = await supabaseServer();
     const { data: userData, error: userErr } = await supabase.auth.getUser();
 
-    if (userErr) {
-      return NextResponse.json({ ok: false, error: userErr.message }, { status: 401 });
-    }
-
-    const user = userData.user;
-    if (!user) {
+    if (userErr || !userData.user) {
       return NextResponse.json({ ok: false, error: "Not logged in." }, { status: 401 });
     }
 
-    let profile: ProfilePayload = body.payload ?? {};
+    const userId = userData.user.id;
 
-    if (
-      !profile ||
-      Object.keys(profile).length === 0 ||
-      (!profile.bio && !profile.goals && !profile.stage)
-    ) {
-      const { data: dbProfile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("full_name,bio,timezone,hours_per_week,stage,goals")
-        .eq("id", user.id)
-        .maybeSingle();
+    // Start with whatever payload the frontend sent
+    let payload: Payload = { ...(body.payload ?? {}) };
 
-      if (profileErr) {
-        return NextResponse.json(
-          { ok: false, error: profileErr.message },
-          { status: 500 }
-        );
+    // For profile tasks — always load fresh from DB if fields are missing
+    if (task === "rewrite_profile" || task === "profile_missing") {
+      if (!payload.bio && !payload.goals && !payload.stage) {
+        const { data: dbProfile } = await supabase
+          .from("profiles")
+          .select("full_name,bio,timezone,hours_per_week,stage,goals")
+          .eq("id", userId)
+          .maybeSingle();
+        payload = { ...payload, ...(dbProfile ?? {}) };
       }
-
-      profile = dbProfile ?? {};
     }
 
-    const prompt = buildPrompt(task, profile);
+    const prompt = buildPrompt(task, payload);
 
     let output_text = "";
     if (provider === "openai") {
@@ -236,14 +210,9 @@ export async function POST(req: Request) {
 
     const parsed = tryParseJson(output_text);
 
-    return NextResponse.json({
-      ok: true,
-      output_text,
-      parsed,
-      profile_used: profile,
-      task,
-    });
+    return NextResponse.json({ ok: true, output_text, parsed, task });
   } catch (e: any) {
+    console.error("AI route error:", e?.message);
     return NextResponse.json(
       { ok: false, error: e?.message ?? String(e) },
       { status: 500 }

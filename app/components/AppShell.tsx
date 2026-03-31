@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useMemo } from "react";
-import Image from "next/image";
 
 const NAV_GROUPS = [
   {
@@ -42,19 +41,22 @@ export default function AppShell({
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      {/* ── Sidebar ──────────────────────────────── */}
+      {/* ── Sidebar ── */}
       <nav className="nav-sidebar">
 
-        {/* Logo — fixed size, no overflow */}
+        {/* Animated Logo */}
         <div className="nav-logo-wrap">
-          <Image
-            src="/images/logo.png"
-            alt="CoFounder Connection"
-            width={148}
-            height={44}
-            className="nav-logo-img"
-            priority
-          />
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <div className="logo-mark">
+              <span className="logo-c">C</span>
+              <div className="logo-bond">
+                <div className="logo-bond-line" />
+                <div className="logo-bond-line" />
+                <div className="logo-bond-line" />
+              </div>
+              <span className="logo-c">C</span>
+            </div>
+          </Link>
           <p className="nav-tagline">Find your perfect cofounder</p>
         </div>
 
@@ -84,12 +86,12 @@ export default function AppShell({
           ))}
         </div>
 
-        {/* Footer: sign out */}
+        {/* Footer */}
         <div className="nav-footer">
           <button
             onClick={signOut}
             className="nav-item"
-            style={{ width: "100%", background: "none", cursor: "pointer" }}
+            style={{ width: "100%", background: "none", cursor: "pointer", border: "none" }}
           >
             <SignOutIcon className="nav-icon" />
             <span>Sign Out</span>
@@ -97,14 +99,14 @@ export default function AppShell({
         </div>
       </nav>
 
-      {/* ── Main content ─────────────────────────── */}
+      {/* ── Main content ── */}
       <main className="main-content" style={{ flex: 1 }}>
         {title && (
           <div className="page-header anim-up">
             <h1 className="page-title">{title}</h1>
           </div>
         )}
-        <div className="anim-up" style={{ animationDelay: "0.06s" }}>
+        <div className="anim-up" style={{ animationDelay: "0.08s" }}>
           {children}
         </div>
       </main>
@@ -112,7 +114,7 @@ export default function AppShell({
   );
 }
 
-/* ── SVG Icons ───────────────────────────────────── */
+/* ── SVG Icons ── */
 function HomeIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>;
 }

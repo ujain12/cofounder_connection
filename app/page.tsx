@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "./components/AppShell";
@@ -13,6 +12,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<"signin" | "signup" | null>(null);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -28,7 +28,8 @@ export default function Home() {
     const { error } = await supabase.auth.signUp({ email, password });
     setBusy(null);
     if (error) return alert(error.message);
-    alert("Account created ✅ Now click Sign In.");
+    alert("Account created ✅ Now sign in.");
+    setMode("signin");
   }
 
   async function signIn() {
@@ -42,81 +43,176 @@ export default function Home() {
   /* ── LOGGED OUT ── */
   if (!user) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center bg-[#07080f] overflow-hidden">
-
-        {/* Background glows */}
-        <div className="pointer-events-none fixed inset-0">
-          <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px]" />
-          <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full bg-violet-600/8 blur-[120px]" />
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#060810",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        {/* Glows */}
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none" }}>
+          <div style={{
+            position: "absolute", top: -200, left: -200,
+            width: 600, height: 600, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(99,102,241,0.15), transparent 70%)",
+            filter: "blur(40px)",
+          }} />
+          <div style={{
+            position: "absolute", bottom: -200, right: -200,
+            width: 600, height: 600, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(124,58,237,0.12), transparent 70%)",
+            filter: "blur(40px)",
+          }} />
         </div>
 
-        <div className="relative z-10 w-full max-w-sm px-4">
+        <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 400, padding: "0 20px" }}>
 
           {/* Logo */}
-          <div className="mb-8 text-center">
-            <div className="flex justify-center mb-4">
-              <Image
-                src="/images/logo.png"
-                alt="CoFounder Connection"
-                width={180}
-                height={54}
-                className="object-contain"
-                priority
-              />
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <div className="logo-mark">
+                <span className="logo-c">C</span>
+                <div className="logo-bond">
+                  <div className="logo-bond-line" />
+                  <div className="logo-bond-line" />
+                  <div className="logo-bond-line" />
+                </div>
+                <span className="logo-c">C</span>
+              </div>
             </div>
-            <p className="text-sm text-slate-500">
+            <h1 style={{
+              fontFamily: "'Syne', sans-serif",
+              fontSize: 22, fontWeight: 800,
+              color: "#f0f2fc", marginBottom: 8,
+              letterSpacing: "-0.02em",
+            }}>
+              Cofounder Connections
+            </h1>
+            <p style={{ fontSize: 13, color: "#64748b" }}>
               Connect with the right cofounder and build something great.
             </p>
           </div>
 
           {/* Auth card */}
-          <div className="rounded-2xl border border-white/8 bg-[#0d0f1a] p-6 shadow-[0_4px_40px_rgba(0,0,0,0.6)]">
+          <div style={{
+            background: "#0c0e1a",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 20,
+            padding: 28,
+            boxShadow: "0 8px 48px rgba(0,0,0,0.6), 0 0 80px rgba(99,102,241,0.06)",
+          }}>
+            {/* Mode toggle */}
+            <div style={{
+              display: "flex", gap: 4,
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 12, padding: 4,
+              marginBottom: 24,
+            }}>
+              {(["signin", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  style={{
+                    flex: 1, padding: "8px 0",
+                    borderRadius: 9, border: "none",
+                    fontFamily: "'Manrope', sans-serif",
+                    fontSize: 13, fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    background: mode === m
+                      ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                      : "transparent",
+                    color: mode === m ? "#fff" : "#64748b",
+                    boxShadow: mode === m ? "0 2px 12px rgba(99,102,241,0.3)" : "none",
+                  }}
+                >
+                  {m === "signin" ? "Sign In" : "Sign Up"}
+                </button>
+              ))}
+            </div>
 
-            <div className="flex flex-col gap-4">
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+                <label style={{
+                  display: "block", fontSize: 10, fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.1em",
+                  color: "#94a3b8", marginBottom: 6,
+                }}>
                   Email
                 </label>
-                <Input
+                <input
+                  type="email"
                   placeholder="you@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (mode === "signin" ? signIn() : signUp())}
+                  style={{
+                    width: "100%", padding: "11px 14px",
+                    background: "#080a14",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                    color: "#f0f2fc", fontSize: 13,
+                    fontFamily: "'Manrope', sans-serif",
+                    outline: "none",
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+                <label style={{
+                  display: "block", fontSize: 10, fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.1em",
+                  color: "#94a3b8", marginBottom: 6,
+                }}>
                   Password
                 </label>
-                <Input
-                  placeholder="••••••••"
+                <input
                   type="password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (mode === "signin" ? signIn() : signUp())}
+                  style={{
+                    width: "100%", padding: "11px 14px",
+                    background: "#080a14",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                    color: "#f0f2fc", fontSize: 13,
+                    fontFamily: "'Manrope', sans-serif",
+                    outline: "none",
+                  }}
                 />
               </div>
 
-              <div className="flex gap-2 mt-1">
-                <Button
-                  onClick={signIn}
-                  disabled={busy !== null}
-                  className="flex-1 justify-center"
-                >
-                  {busy === "signin" ? "Signing in…" : "Sign In"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={signUp}
-                  disabled={busy !== null}
-                  className="flex-1 justify-center"
-                >
-                  {busy === "signup" ? "Creating…" : "Sign Up"}
-                </Button>
-              </div>
+              <button
+                onClick={mode === "signin" ? signIn : signUp}
+                disabled={busy !== null}
+                style={{
+                  width: "100%", padding: "12px 0",
+                  background: busy !== null
+                    ? "rgba(99,102,241,0.5)"
+                    : "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  border: "none", borderRadius: 12,
+                  color: "#fff",
+                  fontFamily: "'Manrope', sans-serif",
+                  fontSize: 14, fontWeight: 700,
+                  cursor: busy !== null ? "not-allowed" : "pointer",
+                  boxShadow: "0 4px 24px rgba(99,102,241,0.35)",
+                  transition: "all 0.2s ease",
+                  marginTop: 4,
+                }}
+              >
+                {busy !== null
+                  ? (busy === "signin" ? "Signing in..." : "Creating account...")
+                  : (mode === "signin" ? "Sign In" : "Create Account")}
+              </button>
             </div>
 
-            <p className="mt-4 text-[11px] text-slate-600 text-center">
-              Use 2 different emails to test matching end-to-end.
+            <p style={{ marginTop: 20, fontSize: 11, color: "#334155", textAlign: "center" }}>
+              
             </p>
           </div>
         </div>
@@ -127,59 +223,80 @@ export default function Home() {
   /* ── LOGGED IN ── */
   return (
     <AppShell title="Home">
-      <div className="flex flex-col gap-6">
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* Welcome */}
         <Card hover={false}>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <h1 className="text-xl font-bold text-slate-100">Welcome back 👋</h1>
-              <p className="text-sm text-slate-400 mt-1">{user.email}</p>
+              <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f2fc" }}>Welcome back</h1>
+              <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{user.email}</p>
             </div>
-            <div
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm border-2 border-indigo-500/30"
-            >
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: "linear-gradient(135deg, #4f46e5, #bba6df)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontWeight: 700, fontSize: 14,
+              border: "2px solid rgba(99,102,241,0.3)",
+              flexShrink: 0,
+            }}>
               {user.email?.[0]?.toUpperCase() ?? "U"}
             </div>
           </div>
 
-          {/* Quick nav */}
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {[
-              { href: "/profile",   label: "My Profile",  icon: "👤" },
-              { href: "/matches",   label: "Find Cofounders", icon: "✨" },
-              { href: "/requests",  label: "Requests",    icon: "🔔" },
-              { href: "/workspace", label: "Workspace",   icon: "⚡" },
+              { href: "/profile",   label: "My Profile" },
+              { href: "/matches",   label: "Find Cofounders" },
+              { href: "/requests",  label: "Requests" },
+              { href: "/workspace", label: "Workspace" },
             ].map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/8 bg-white/4 px-3.5 py-2 text-xs font-medium text-slate-300 hover:border-indigo-500/30 hover:bg-indigo-500/8 hover:text-slate-100 transition-all"
+                style={{
+                  display: "inline-flex", alignItems: "center",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.04)",
+                  padding: "7px 14px",
+                  fontSize: 12, fontWeight: 600,
+                  color: "#94a3b8",
+                  textDecoration: "none",
+                  transition: "all 0.18s ease",
+                }}
               >
-                <span>{item.icon}</span>
                 {item.label}
               </Link>
             ))}
           </div>
         </Card>
 
-        {/* Tip card */}
-        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-200">Complete your profile first</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                A strong bio, clear goals, and your timezone help you get better matches.{" "}
-                <Link href="/profile" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">
-                  Update now →
-                </Link>
-              </p>
-            </div>
+        {/* Tip */}
+        <div style={{
+          borderRadius: 16,
+          border: "1px solid rgba(99,102,241,0.2)",
+          background: "rgba(99,102,241,0.06)",
+          padding: "16px 20px",
+          display: "flex", alignItems: "flex-start", gap: 14,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: "rgba(99,102,241,0.15)",
+            border: "1px solid rgba(99,102,241,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#818cf8" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+          </div>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>Complete your profile first</p>
+            <p style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+              A strong bio, clear goals, and your timezone help you get better matches.{" "}
+              <Link href="/profile" style={{ color: "#818cf8" }}>Update now →</Link>
+            </p>
           </div>
         </div>
 
