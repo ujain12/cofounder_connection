@@ -14,7 +14,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Cofounder Connections",
-  description: "Find and connect with serious startup cofounders, investors, and mentors.",
+  description:
+    "Find and connect with serious startup cofounders, investors, and mentors.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
