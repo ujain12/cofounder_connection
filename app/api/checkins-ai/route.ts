@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { requireCredits } from "@/lib/require-credits";
 
 async function makeSupabase() {
   const cookieStore = await cookies();
@@ -25,6 +26,10 @@ async function makeSupabase() {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Credit gate — blocks if no credits ──
+    const gate = await requireCredits();
+    if (gate.error) return gate.error;
+
     const supabase = await makeSupabase();
     const { data: userData } = await supabase.auth.getUser();
 
@@ -42,10 +47,7 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       console.error("OPENAI_API_KEY is missing from .env.local");
-      return NextResponse.json(
-        { ok: false, error: "OPENAI_API_KEY not set in .env.local" },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "OPENAI_API_KEY not set in .env.local" }, { status: 500 });
     }
 
     const client = new OpenAI({ apiKey });
@@ -59,12 +61,8 @@ export async function POST(req: NextRequest) {
     const text = res.choices[0]?.message?.content ?? "";
 
     return NextResponse.json({ ok: true, text, type });
-
   } catch (e: any) {
     console.error("checkins-ai error:", e?.message, e?.status);
-    return NextResponse.json(
-      { ok: false, error: e?.message ?? "AI call failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: e?.message ?? "AI call failed" }, { status: 500 });
   }
 }

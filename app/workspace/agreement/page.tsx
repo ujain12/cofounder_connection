@@ -12,13 +12,13 @@ type AgreementForm = { agreement_title:string; project_name:string; startup_stag
 const emptyForm: AgreementForm = { agreement_title:"",project_name:"",startup_stage:"",founder_a_role:"",founder_b_role:"",shared_responsibilities:"",equity_expectations:"",vesting_expectations:"",cash_contribution:"",time_commitment:"",availability_expectation:"",decision_style:"",conflict_handling:"",meeting_cadence:"",communication_preference:"",milestones:"",notes:"",status:"draft" };
 
 const S = {
-  section: { background:"#111827", border:"1px solid rgba(99,102,241,0.18)", borderRadius:16, padding:24, marginBottom:16 },
-  input: { width:"100%", background:"#1e2235", border:"1px solid rgba(99,102,241,0.25)", borderRadius:10, padding:"10px 14px", color:"#f0f2fc", fontSize:13, outline:"none", fontFamily:"inherit", WebkitTextFillColor:"#f0f2fc" },
-  label: { display:"block" as const, fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.1em", color:"#94a3b8", marginBottom:6 },
-  btnPrimary: { background:"linear-gradient(135deg,#4f46e5,#7c3aed)", border:"none", borderRadius:10, padding:"10px 22px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
-  btnGhost: { background:"transparent", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"10px 22px", color:"#94a3b8", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" },
-  sectionTitle: { fontFamily:"'Syne',sans-serif", fontSize:17, fontWeight:700, color:"#f0f2fc", marginBottom:4 },
-  sectionSub: { fontSize:13, color:"#64748b", marginBottom:18 },
+  section: { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:16, padding:24, marginBottom:16 },
+  input: { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", color:"var(--text-primary)", fontSize:13, outline:"none", fontFamily:"inherit", WebkitTextFillColor:"var(--text-primary)" },
+  label: { display:"block" as const, fontSize:10, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.1em", color:"var(--text-muted)", marginBottom:6 },
+  btnPrimary: { background:"var(--accent)", border:"none", borderRadius:10, padding:"10px 22px", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+  btnGhost: { background:"transparent", border:"1px solid var(--border)", borderRadius:10, padding:"10px 22px", color:"var(--text-muted)", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" },
+  sectionTitle: { fontFamily:"inherit", fontSize:17, fontWeight:700, color:"var(--text-primary)", marginBottom:4 },
+  sectionSub: { fontSize:13, color:"var(--text-muted)", marginBottom:18 },
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -124,13 +124,13 @@ export default function AgreementPage() {
 
   const sm=matches.find(m=>m.match_id===selectedMatchId);
 
-  if (loadingMatches) return <AppShell title="Founder Agreement"><div style={{color:"#94a3b8",padding:40}}>Loading...</div></AppShell>;
+  if (loadingMatches) return <AppShell title="Founder Agreement"><div style={{color:"var(--text-muted)",padding:40}}>Loading...</div></AppShell>;
 
   if (matches.length===0) return (
     <AppShell title="Founder Agreement">
       <div style={{...S.section,textAlign:"center",padding:60}}>
-        <p style={{fontSize:18,fontWeight:700,color:"#f0f2fc",marginBottom:8}}>No accepted matches yet</p>
-        <p style={{color:"#64748b",fontSize:14}}>Agreement unlocks after a founder match is accepted.</p>
+        <p style={{fontSize:18,fontWeight:700,color:"var(--text-primary)",marginBottom:8}}>No accepted matches yet</p>
+        <p style={{color:"var(--text-muted)",fontSize:14}}>Agreement unlocks after a founder match is accepted.</p>
       </div>
     </AppShell>
   );
@@ -142,20 +142,20 @@ export default function AgreementPage() {
         {/* Status bar */}
         <div style={{...S.section,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:16}}>
           <div>
-            <p style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#475569",marginBottom:4}}>Agreement Status</p>
-            <p style={{fontSize:16,fontWeight:700,color:form.status==="finalized"?"#34d399":"#fbbf24",textTransform:"capitalize"}}>{form.status}</p>
-            <p style={{fontSize:11,color:"#475569",marginTop:2}}>{autosaveLabel}</p>
+            <p style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"var(--text-muted)",marginBottom:4}}>Agreement Status</p>
+            <p style={{fontSize:16,fontWeight:700,color:form.status==="finalized"?"var(--green)":"var(--amber)",textTransform:"capitalize"}}>{form.status}</p>
+            <p style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{autosaveLabel}</p>
           </div>
-          <div style={{fontSize:11,color:"#475569",textAlign:"right"}}>
-            {lastEditedByName && <p>Edited by: <span style={{color:"#94a3b8"}}>{lastEditedByName}</span></p>}
-            {lastSavedAt && <p>Saved: <span style={{color:"#94a3b8"}}>{new Date(lastSavedAt).toLocaleString()}</span></p>}
+          <div style={{fontSize:11,color:"var(--text-muted)",textAlign:"right"}}>
+            {lastEditedByName && <p>Edited by: <span style={{color:"var(--text-muted)"}}>{lastEditedByName}</span></p>}
+            {lastSavedAt && <p>Saved: <span style={{color:"var(--text-muted)"}}>{new Date(lastSavedAt).toLocaleString()}</span></p>}
           </div>
         </div>
 
         {pendingRemoteRefresh && (
           <div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-            <p style={{fontSize:13,color:"#fbbf24"}}>Your cofounder saved changes. Load latest?</p>
-            <button onClick={()=>selectedMatchId&&loadAgreement(selectedMatchId,true)} style={{...S.btnGhost,padding:"7px 16px",fontSize:12,color:"#fbbf24",borderColor:"rgba(245,158,11,0.3)"}}>Load Latest</button>
+            <p style={{fontSize:13,color:"var(--amber)"}}>Your cofounder saved changes. Load latest?</p>
+            <button onClick={()=>selectedMatchId&&loadAgreement(selectedMatchId,true)} style={{...S.btnGhost,padding:"7px 16px",fontSize:12,color:"var(--amber)",borderColor:"var(--amber-border)"}}>Load Latest</button>
           </div>
         )}
 
@@ -181,7 +181,7 @@ export default function AgreementPage() {
             <p style={S.sectionTitle}>Cofounder</p>
             {[["Name",sm?.other?.full_name??"—"],["Bio",sm?.other?.bio??"-"],["Stage",sm?.other?.stage??"-"]].map(([l,v])=>(
               <div key={l} style={{marginBottom:10}}>
-                <p style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"#475569",marginBottom:2}}>{l}</p>
+                <p style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"var(--text-muted)",marginBottom:2}}>{l}</p>
                 <p style={{fontSize:13,color:"#cbd5e1"}}>{v}</p>
               </div>
             ))}

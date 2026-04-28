@@ -1,269 +1,345 @@
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
-import Anthropic from "@anthropic-ai/sdk";
-import { supabaseServer } from "@/lib/supabase-server";
+// app/api/search-agent/route.ts
+// ReAct search agent with multi-model approach
 
-type Provider = "openai" | "anthropic" | "hf";
-type Task =
-  | "chatbot"
-  | "rewrite_profile"
-  | "profile_missing"
-  | "match_explain"
-  | "opener"
-  | "coach";
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { callModel, safeParseJSON } from "@/lib/model-router";
+import { ALL_TAGS } from "@/lib/tags";
 
-type ProfilePayload = {
-  full_name?: string;
-  bio?: string;
-  timezone?: string;
-  hours_per_week?: number | null;
-  stage?: string;
-  goals?: string;
-  question?: string;
-  me?: any;
-  other?: any;
-  transcript?: string;
-};
-
-function safeJson(obj: unknown, maxChars = 12000) {
-  const s = JSON.stringify(obj, null, 2);
-  if (s.length <= maxChars) return s;
-  return s.slice(0, maxChars) + "\n...(truncated)";
-}
-
-function buildPrompt(task: Task, payload: ProfilePayload) {
-  // ── CHATBOT ──────────────────────────────────────────────────────────────
-  if (task === "chatbot") {
-    const q = payload.question ?? "";
-    return `You are the Cofounder Connection AI assistant — an expert on startups, cofounder relationships, equity, product, and early-stage company building.
-
-Answer the following question in a helpful, direct, and specific way. Use numbered lists or bullet points where appropriate.
-
-QUESTION: ${q}`;
-  }
-
-  // ── REWRITE PROFILE ───────────────────────────────────────────────────────
-  if (task === "rewrite_profile") {
-    const profileBlock = safeJson(payload);
-    return `You are helping a founder improve their cofounder-matching profile.
-
-Use the CURRENT PROFILE below as the source of truth.
-Do not invent random background details.
-Only improve clarity, specificity, and attractiveness for cofounder matching.
-If a field is blank, suggest a strong but realistic version that fits the rest of the profile.
-
-CURRENT PROFILE:
-${profileBlock}
-
-Return ONLY valid JSON in this exact shape:
-{
-  "bio": "improved bio text",
-  "goals": "improved goals text",
-  "stage": "improved startup stage text",
-  "timezone": "improved timezone text or existing timezone",
-  "hours_per_week": 10,
-  "summary": [
-    "short note 1",
-    "short note 2",
-    "short note 3"
-  ]
-}`;
-  }
-
-  // ── PROFILE MISSING ───────────────────────────────────────────────────────
-  if (task === "profile_missing") {
-    const profileBlock = safeJson(payload);
-    return `You are reviewing a founder profile for missing or weak areas.
-
-Use the CURRENT PROFILE below as the source of truth.
-Identify what is missing, too vague, or weak for cofounder matching.
-For each weak or missing field, suggest a better replacement.
-
-CURRENT PROFILE:
-${profileBlock}
-
-Return ONLY valid JSON in this exact shape:
-{
-  "missing": [
+// ── Supabase ───────────────────────────────────────────────────
+async function makeSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      "field": "bio",
-      "reason": "why this is weak or missing",
-      "suggestion": "better text for that field"
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(s) {
+          try { s.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+          catch {}
+        },
+      },
     }
-  ],
-  "suggested_fields": {
-    "bio": "optional improved bio",
-    "goals": "optional improved goals",
-    "stage": "optional improved stage",
-    "timezone": "optional improved timezone",
-    "hours_per_week": 10
-  },
-  "overall_feedback": [
-    "short feedback 1",
-    "short feedback 2",
-    "short feedback 3"
-  ]
-}`;
-  }
-
-  // ── MATCH EXPLAIN ─────────────────────────────────────────────────────────
-  if (task === "match_explain") {
-    return `You are a cofounder matching expert.
-
-Explain in 3-5 sentences why these two founders could be a strong match. Be specific about complementary skills, shared goals, and potential synergies. End with one honest potential challenge they should discuss.
-
-FOUNDER (YOU):
-${safeJson(payload.me ?? {})}
-
-POTENTIAL COFOUNDER:
-${safeJson(payload.other ?? {})}`;
-  }
-
-  // ── OPENER ────────────────────────────────────────────────────────────────
-  if (task === "opener") {
-    return `You are a startup networking expert.
-
-Write a short, warm, personalized connection message (3-4 sentences max) from Founder A to Founder B. Make it feel genuine — mention something specific from their profile. End with a clear call to action.
-
-FOUNDER A (sender):
-${safeJson(payload.me ?? {})}
-
-FOUNDER B (recipient):
-${safeJson(payload.other ?? {})}`;
-  }
-
-  // ── COACH ─────────────────────────────────────────────────────────────────
-  if (task === "coach") {
-    return `You are a startup communication coach.
-
-Review this conversation transcript between two founders and give 3 specific, actionable suggestions on how they can communicate better, build trust faster, or make progress on their collaboration.
-
-TRANSCRIPT:
-${payload.transcript ?? "(no messages yet)"}`;
-  }
-
-  // ── FALLBACK ──────────────────────────────────────────────────────────────
-  return `You are the Cofounder Connection AI assistant. Answer helpfully and briefly.\n\n${safeJson(payload)}`;
+  );
 }
 
-async function callOpenAI(model: string, prompt: string) {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const res = await client.chat.completions.create({
-    model,
-    max_tokens: 1200,
-    messages: [{ role: "user", content: prompt }],
+// ══════════════════════════════════════════════════════════════
+// TOOLS — what the agent can call
+// ══════════════════════════════════════════════════════════════
+
+// Tool 1: Extract tags from natural language
+// Uses: Claude Haiku (cheap, just extraction)
+async function tool_extract_tags(query: string): Promise<string[]> {
+  const tagLabels = ALL_TAGS.map(t => t.label).join(", ");
+
+  const result = await callModel("tag_extraction", `
+    You are extracting skill tags from a founder's search query.
+    
+    Available tags: ${tagLabels}
+    
+    Search query: "${query}"
+    
+    Return ONLY a JSON array of tag labels that match what the founder is looking for.
+    Only include tags explicitly mentioned or strongly implied.
+    Maximum 6 tags.
+    
+    Example: ["AI / ML", "Technical Founder", "HealthTech"]
+    
+    Return ONLY the JSON array, nothing else.
+  `);
+
+  const parsed = safeParseJSON<string[]>(result);
+  return parsed ?? [];
+}
+
+// Tool 2: Search founders by tags
+// Uses: Supabase query — no AI needed
+async function tool_search_by_tags(
+  supabase: any,
+  tags: string[],
+  excludeUserId: string
+): Promise<string[]> {
+  if (tags.length === 0) return [];
+
+  // Get all founders who have ANY of the required tags
+  const { data } = await supabase
+    .from("profile_tags")
+    .select("user_id, tag")
+    .in("tag", tags)
+    .neq("user_id", excludeUserId);
+
+  if (!data || data.length === 0) return [];
+
+  // Score founders by how many tags match
+  const tagCounts: Record<string, number> = {};
+  data.forEach((row: any) => {
+    tagCounts[row.user_id] = (tagCounts[row.user_id] ?? 0) + 1;
   });
-  return { text: res.choices[0]?.message?.content ?? "" };
+
+  // Sort by most matching tags, return top 10
+  return Object.entries(tagCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([userId]) => userId);
 }
 
-async function callAnthropic(model: string, prompt: string) {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const msg = await client.messages.create({
-    model,
-    max_tokens: 1200,
-    messages: [{ role: "user", content: prompt }],
-  });
-  const text = (msg.content || [])
-    .map((block: any) => (block.type === "text" ? block.text : ""))
-    .join("") || "";
-  return { text };
+// Tool 3: Get full profiles + tags for founders
+// Uses: Supabase query — no AI needed
+async function tool_get_profiles(
+  supabase: any,
+  userIds: string[]
+): Promise<any[]> {
+  if (userIds.length === 0) return [];
+
+  const [profilesRes, tagsRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, bio, stage, goals, hours_per_week")
+      .in("id", userIds),
+    supabase
+      .from("profile_tags")
+      .select("user_id, tag, category")
+      .in("user_id", userIds),
+  ]);
+
+  const profiles = profilesRes.data ?? [];
+  const tags = tagsRes.data ?? [];
+
+  return profiles.map((p: any) => ({
+    ...p,
+    tags: tags.filter((t: any) => t.user_id === p.id).map((t: any) => t.tag),
+  }));
 }
 
-async function callHF(model: string, prompt: string) {
-  const url = `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.HF_API_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      inputs: prompt,
-      parameters: { max_new_tokens: 600, return_full_text: false },
-    }),
-  });
-  const json = await r.json();
-  let text = "";
-  if (Array.isArray(json) && json[0]?.generated_text) text = json[0].generated_text;
-  else if (typeof json === "object" && json?.generated_text) text = json.generated_text;
-  else text = JSON.stringify(json);
-  return { text };
+// Tool 4: Score compatibility between two founders
+// Uses: Claude Haiku — runs once per candidate (cheap, parallel)
+async function tool_score_match(
+  myProfile: any,
+  theirProfile: any,
+  searchQuery: string
+): Promise<{ score: number; reason: string; match_tags: string[] }> {
+  const result = await callModel("score_match", `
+    You are scoring cofounder compatibility.
+    Be direct and honest. Score based on complementarity, not similarity.
+    Two founders with identical skills are a BAD match.
+    
+    Search intent: "${searchQuery}"
+    
+    Founder A (searcher):
+    Name: ${myProfile.full_name}
+    Bio: ${myProfile.bio}
+    Stage: ${myProfile.stage}
+    Goals: ${myProfile.goals}
+    Tags: ${myProfile.tags?.join(", ") ?? "none"}
+    
+    Founder B (candidate):
+    Name: ${theirProfile.full_name}
+    Bio: ${theirProfile.bio}
+    Stage: ${theirProfile.stage}
+    Tags: ${theirProfile.tags?.join(", ") ?? "none"}
+    
+    Return ONLY valid JSON:
+    {
+      "score": 8,
+      "reason": "one specific sentence explaining the match",
+      "match_tags": ["AI / ML", "HealthTech"]
+    }
+  `);
+
+  const parsed = safeParseJSON<{ score: number; reason: string; match_tags: string[] }>(result);
+  return parsed ?? { score: 5, reason: "Potential match", match_tags: [] };
 }
 
-function tryParseJson(raw: string) {
+// Tool 5: Synthesize final recommendations
+// Uses: Claude Sonnet — runs ONCE for final output (quality matters)
+async function tool_synthesize(
+  query: string,
+  myProfile: any,
+  topMatches: any[]
+): Promise<string> {
+  return await callModel("search_synthesis", `
+    You are a cofounder matching expert summarizing search results.
+    Be specific, honest, and actionable. Reference actual data.
+    
+    Founder searching: ${myProfile.full_name}
+    Their background: ${myProfile.bio}
+    Their tags: ${myProfile.tags?.join(", ")}
+    Search query: "${query}"
+    
+    Top matches found:
+    ${topMatches.map((m, i) => `
+    ${i + 1}. ${m.profile.full_name} (score: ${m.score}/10)
+       Tags: ${m.profile.tags?.join(", ")}
+       Why: ${m.reason}
+    `).join("")}
+    
+    Write a 2-paragraph summary:
+    Paragraph 1: What kind of cofounder profile emerged from this search
+    Paragraph 2: One specific action the founder should take (e.g. "Message X first because...")
+    
+    Be specific. Name actual founders from the results.
+  `);
+}
+
+// ══════════════════════════════════════════════════════════════
+// REACT AGENT LOOP
+// ══════════════════════════════════════════════════════════════
+// Thought → Action → Observation → repeat until ANSWER
+
+async function reactSearchAgent(
+  supabase: any,
+  userId: string,
+  query: string
+) {
+  const steps: { thought: string; action: string; result: string }[] = [];
+
+  // ── Step 1: Extract tags from query (Haiku)
+  steps.push({ thought: "Extracting skill tags from search query", action: "tag_extraction", result: "" });
+  const extractedTags = await tool_extract_tags(query);
+  steps[0].result = `Found tags: ${extractedTags.join(", ") || "none — will use broad search"}`;
+
+  // ── Step 1b: Get all already-matched IDs (both directions)
+  const [sentMatches, receivedMatches] = await Promise.all([
+    supabase.from("matches").select("candidate_id").eq("user_id", userId),
+    supabase.from("matches").select("user_id").eq("candidate_id", userId),
+  ]);
+  const alreadyMatchedIds = new Set([
+    ...((sentMatches.data ?? []).map((m: any) => m.candidate_id)),
+    ...((receivedMatches.data ?? []).map((m: any) => m.user_id)),
+  ]);
+
+  // ── Step 2: Search founders by tags (Supabase, no AI)
+  steps.push({ thought: "Searching founders database by extracted tags", action: "search_by_tags", result: "" });
+  let candidateIds = await tool_search_by_tags(supabase, extractedTags, userId);
+
+  // Filter out already-matched founders
+  candidateIds = candidateIds.filter((id: string) => !alreadyMatchedIds.has(id));
+
+  // Fallback: if no tag matches, get all unmatched founders
+  if (candidateIds.length === 0) {
+    const { data: allProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .neq("id", userId)
+      .limit(50);
+    candidateIds = (allProfiles ?? [])
+      .map((p: any) => p.id)
+      .filter((id: string) => !alreadyMatchedIds.has(id));
+    steps[1].result = `No tag matches — broadening to ${candidateIds.length} unmatched founders`;
+  } else {
+    steps[1].result = `Found ${candidateIds.length} unmatched founders matching tags`;
+  }
+
+  // ── Step 3: Get full profiles (Supabase, no AI)
+  steps.push({ thought: "Loading full profiles and tags for candidates", action: "get_profiles", result: "" });
+  const [myProfileRes, candidateProfiles] = await Promise.all([
+    supabase.from("profiles").select("id,full_name,bio,stage,goals,hours_per_week").eq("id", userId).maybeSingle(),
+    tool_get_profiles(supabase, candidateIds),
+  ]);
+
+  const myProfile = myProfileRes.data;
+
+  // Get my own tags
+  const { data: myTagsData } = await supabase
+    .from("profile_tags").select("tag").eq("user_id", userId);
+  myProfile.tags = (myTagsData ?? []).map((t: any) => t.tag);
+
+  steps[2].result = `Loaded ${candidateProfiles.length} profiles with tags`;
+
+  // ── Step 4: Score all candidates in parallel (Haiku — cheap parallel calls)
+  steps.push({ thought: "Scoring compatibility with each founder", action: "score_matches", result: "" });
+
+  const scoreResults = await Promise.all(
+    candidateProfiles.map(async (candidate) => {
+      const { score, reason, match_tags } = await tool_score_match(myProfile, candidate, query);
+      return { profile: candidate, score, reason, match_tags };
+    })
+  );
+
+  // Sort by score, keep top 5
+  const ranked = scoreResults
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  steps[3].result = `Scored ${scoreResults.length} founders — top score: ${ranked[0]?.score ?? 0}/10`;
+
+  // ── Step 5: Synthesize recommendation (Sonnet — runs once, quality output)
+  steps.push({ thought: "Building final recommendation", action: "synthesize", result: "" });
+  const recommendation = await tool_synthesize(query, myProfile, ranked.slice(0, 3));
+  steps[4].result = "Recommendation generated";
+
+  return { steps, ranked, recommendation, extractedTags };
+}
+
+// ══════════════════════════════════════════════════════════════
+// API ENDPOINT
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// UNMATCH ENDPOINT — DELETE /api/search-agent
+// ══════════════════════════════════════════════════════════════
+export async function DELETE(req: NextRequest) {
   try {
-    return JSON.parse(raw);
-  } catch {
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try { return JSON.parse(raw.slice(start, end + 1)); } catch { return null; }
-    }
-    return null;
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-
-    const provider = (body.provider as Provider) || "openai";
-    const model = (body.model as string) || "gpt-4o-mini";
-    const task = (body.task as Task) || "chatbot";
-
-    const supabase = await supabaseServer();
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-
-    if (userErr) {
-      return NextResponse.json({ ok: false, error: userErr.message }, { status: 401 });
-    }
+    const supabase = await makeSupabase();
+    const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
-      return NextResponse.json({ ok: false, error: "Not logged in." }, { status: 401 });
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // Build payload — merge body.payload with any top-level fields
-    let payload: ProfilePayload = {
-      ...(body.payload ?? {}),
-    };
-
-    // For profile tasks with no payload, load from DB
-    if (
-      (task === "rewrite_profile" || task === "profile_missing") &&
-      (!payload.bio && !payload.goals && !payload.stage)
-    ) {
-      const { data: dbProfile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("full_name,bio,timezone,hours_per_week,stage,goals")
-        .eq("id", userData.user.id)
-        .maybeSingle();
-
-      if (profileErr) {
-        return NextResponse.json({ ok: false, error: profileErr.message }, { status: 500 });
-      }
-      payload = { ...payload, ...(dbProfile ?? {}) };
+    const { match_id } = await req.json();
+    if (!match_id) {
+      return NextResponse.json({ ok: false, error: "match_id required" }, { status: 400 });
     }
 
-    const prompt = buildPrompt(task, payload);
+    const userId = userData.user.id;
 
-    let output_text = "";
-    if (provider === "openai") {
-      output_text = (await callOpenAI(model, prompt)).text;
-    } else if (provider === "anthropic") {
-      output_text = (await callAnthropic(model, prompt)).text;
-    } else if (provider === "hf") {
-      output_text = (await callHF(model, prompt)).text;
-    } else {
-      return NextResponse.json({ ok: false, error: "Unknown provider" }, { status: 400 });
+    // Delete the match row (only if user is involved)
+    const { error } = await supabase
+      .from("matches")
+      .delete()
+      .eq("id", match_id)
+      .or(`user_id.eq.${userId},candidate_id.eq.${userId}`);
+
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const parsed = tryParseJson(output_text);
+    // Also delete the chat if it exists
+    await supabase.from("chats").delete().eq("match_id", match_id);
 
-    return NextResponse.json({ ok: true, output_text, parsed, task });
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error("AI route error:", e?.message);
-    return NextResponse.json(
-      { ok: false, error: e?.message ?? String(e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: e?.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await makeSupabase();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { query } = await req.json();
+    if (!query?.trim()) {
+      return NextResponse.json({ ok: false, error: "query is required" }, { status: 400 });
+    }
+
+    const result = await reactSearchAgent(supabase, userData.user.id, query);
+
+    return NextResponse.json({
+      ok: true,
+      query,
+      extracted_tags: result.extractedTags,
+      steps: result.steps,
+      results: result.ranked,
+      recommendation: result.recommendation,
+    });
+
+  } catch (e: any) {
+    console.error("Search agent error:", e?.message);
+    return NextResponse.json({ ok: false, error: e?.message }, { status: 500 });
   }
 }

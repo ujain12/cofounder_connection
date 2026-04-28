@@ -16,13 +16,13 @@ export function Button({
 
   const styles: Record<string, string> = {
     default:
-      "bg-gradient-to-r from-indigo-500 to-violet-600 text-white border-transparent shadow-[0_0_16px_rgba(99,102,241,0.3)] hover:shadow-[0_0_24px_rgba(99,102,241,0.5)] hover:-translate-y-px",
+      "bg-[var(--accent)] text-white border-transparent shadow-[0_0_16px_rgba(22,53,214,0.3)] hover:shadow-[0_0_24px_rgba(22,53,214,0.5)] hover:-translate-y-px",
     ghost:
-      "bg-transparent text-slate-400 border-white/10 hover:border-indigo-500/40 hover:bg-indigo-500/8 hover:text-white",
+      "bg-transparent text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent-border)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]",
     success:
-      "bg-emerald-500/12 text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/20",
+      "bg-[var(--green-soft)] text-[var(--green)] border-[var(--green-border)] hover:bg-[var(--green-soft)]",
     danger:
-      "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/18",
+      "bg-[rgba(220,38,38,0.06)] text-[#dc2626] border-[rgba(220,38,38,0.2)] hover:bg-[rgba(220,38,38,0.1)]",
   };
 
   return (
@@ -47,19 +47,17 @@ export function Card({
   return (
     <div
       className={[
-        "relative rounded-2xl border border-white/8 bg-[#0d0f1a] p-5",
-        "shadow-[0_2px_20px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset]",
+        "relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5",
+        "shadow-[var(--shadow-sm)]",
         "overflow-hidden",
         hover
-          ? "transition-all duration-200 hover:border-indigo-500/25 hover:shadow-[0_4px_24px_rgba(0,0,0,0.5),0_0_32px_rgba(99,102,241,0.1)] hover:-translate-y-px"
+          ? "transition-all duration-200 hover:border-[var(--accent)]/50 hover:shadow-[0_4px_24px_rgba(0,0,0,0.08),0_0_32px_var(--accent-soft)] hover:-translate-y-px"
           : "",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      {/* top shimmer */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
       {children}
     </div>
   );
@@ -76,12 +74,10 @@ export function Input({
     <input
       {...props}
       className={[
-        "w-full rounded-xl border border-white/10 bg-[#0a0c16]",
-        "px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600",
+        "w-full rounded-[var(--radius)] border-[var(--border)] bg-[var(--bg)]",
+        "px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]",
         "outline-none transition-all duration-200",
-        "focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]",
-        // force text visible in all browsers
-        "[color:#f1f5f9] [-webkit-text-fill-color:#f1f5f9]",
+        "focus:border-[var(--accent-border)] focus:shadow-[0_0_0_3px_var(--accent-soft)]",
         className,
       ].join(" ")}
     />
@@ -99,11 +95,10 @@ export function Textarea({
     <textarea
       {...props}
       className={[
-        "w-full rounded-xl border border-white/10 bg-[#0a0c16]",
-        "px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600",
+        "w-full rounded-[var(--radius)] border-[var(--border)] bg-[var(--bg)]",
+        "px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)]",
         "outline-none transition-all duration-200 resize-vertical",
-        "focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]",
-        "[color:#f1f5f9] [-webkit-text-fill-color:#f1f5f9]",
+        "focus:border-[var(--accent-border)] focus:shadow-[0_0_0_3px_var(--accent-soft)]",
         className,
       ].join(" ")}
     />
@@ -121,12 +116,12 @@ export function Badge({
   color?: "indigo" | "emerald" | "cyan" | "rose" | "amber" | "zinc";
 }) {
   const colors: Record<string, string> = {
-    indigo:  "bg-indigo-500/12 text-indigo-300 border-indigo-500/20",
-    emerald: "bg-emerald-500/12 text-emerald-400 border-emerald-500/20",
-    cyan:    "bg-cyan-500/12 text-cyan-400 border-cyan-500/20",
-    rose:    "bg-rose-500/12 text-rose-400 border-rose-500/20",
-    amber:   "bg-amber-500/12 text-amber-400 border-amber-500/20",
-    zinc:    "bg-white/6 text-slate-400 border-white/8",
+    indigo:  "bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent-border)]",
+    emerald: "bg-[var(--green-soft)] text-[var(--green)] border-[var(--green-border)]",
+    cyan:    "bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent-border)]",
+    rose:    "bg-[rgba(220,38,38,0.06)] text-[#dc2626] border-[rgba(220,38,38,0.2)]",
+    amber:   "bg-[var(--amber-soft)] text-[var(--amber)] border-[var(--amber-border)]",
+    zinc:    "bg-[var(--bg-deep)] text-[var(--text-muted)] border-[var(--border)]",
   };
   return (
     <span
@@ -166,7 +161,7 @@ export function Avatar({
 
   return (
     <div
-      className={`flex-shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white border-2 border-indigo-500/30 ${wh} ${fs}`}
+      className={`flex-shrink-0 rounded-full bg-[var(--accent)] flex items-center justify-center font-bold text-white border-2 border-[var(--accent-border)] ${wh} ${fs}`}
       style={{ minWidth: size === "md" ? 40 : size === "lg" ? 56 : size === "xl" ? 80 : 32 }}
     >
       {initials}

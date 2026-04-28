@@ -53,6 +53,7 @@ export default function ChatPage() {
   const [other, setOther] = useState<ProfileLite | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   const pollingMs = 1500;
 
@@ -74,7 +75,6 @@ export default function ChatPage() {
       if (cancelled) return;
       setMe(user.id);
 
-      // Load my name
       const { data: myProf } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
       if (myProf?.full_name) setMyName(myProf.full_name);
 
@@ -117,15 +117,54 @@ export default function ChatPage() {
     setMessages(((data as any[]) ?? []) as Msg[]);
   }
 
+  // ═══════════════════════════════════════════════════════
+  // SEND MESSAGE — goes through moderation API
+  // ═══════════════════════════════════════════════════════
   async function send() {
     if (!chatId || !me || !body.trim()) return;
     setSending(true);
+    setBlocked(false);
     const text = body.trim();
     setBody("");
-    const { error } = await supabase.from("messages").insert({ chat_id: chatId, sender_id: me, body: text });
+
+    try {
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, body: text }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Message was blocked by moderation
+        if (data.flagged) {
+          setBlocked(true);
+          setTimeout(() => setBlocked(false), 8000);
+        } else if (res.status === 403) {
+          // User is banned
+          alert(data.error || "Your account has been suspended.");
+          router.push("/");
+          return;
+        } else {
+          alert(data.error || "Failed to send message.");
+        }
+        setSending(false);
+        return;
+      }
+
+      // Show warning if message was flagged but not blocked
+      if (data.warning) {
+        setBlocked(true);
+        setTimeout(() => setBlocked(false), 5000);
+      }
+
+      await loadMessages(chatId);
+    } catch {
+      alert("Failed to send message.");
+    }
+
     setSending(false);
-    if (error) { console.error(error); alert("Send failed."); return; }
-    await loadMessages(chatId);
   }
 
   return (
@@ -138,21 +177,20 @@ export default function ChatPage() {
           gap: 16, marginBottom: 20,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* Avatar */}
             <div style={{
               width: 48, height: 48, borderRadius: "50%", flexShrink: 0,
-              background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-              border: "2px solid rgba(99,102,241,0.3)",
+              background: "var(--accent)",
+              border: "2px solid var(--accent-border)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 17, fontWeight: 700, color: "#fff",
             }}>
               {initials(other?.full_name ?? null)}
             </div>
             <div>
-              <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: "#f0f2fc", marginBottom: 3 }}>
+              <h2 style={{ fontFamily: "inherit", fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
                 {other?.full_name ? `${other.full_name}` : "Loading..."}
               </h2>
-              <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, maxWidth: 480 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, maxWidth: 480 }}>
                 {other?.bio ?? "Connected cofounder"}
               </p>
             </div>
@@ -164,7 +202,6 @@ export default function ChatPage() {
             borderRadius: 10, padding: "8px 16px",
             color: "#94a3b8", fontSize: 13, fontWeight: 600,
             textDecoration: "none", flexShrink: 0,
-            transition: "all 0.15s",
           }}>
             Back to Matches
           </a>
@@ -174,20 +211,14 @@ export default function ChatPage() {
         <div style={{
           background: "#111827",
           border: "1px solid rgba(99,102,241,0.18)",
-          borderRadius: 16,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
+          borderRadius: 16, overflow: "hidden",
+          display: "flex", flexDirection: "column",
         }}>
 
           {/* Messages area */}
           <div style={{
-            height: 460,
-            overflowY: "auto",
-            padding: "20px 20px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
+            height: 460, overflowY: "auto", padding: "20px 20px 12px",
+            display: "flex", flexDirection: "column", gap: 12,
           }}>
             {loading ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#475569", fontSize: 14 }}>
@@ -208,7 +239,6 @@ export default function ChatPage() {
                   const mine = msg.sender_id === me;
                   return (
                     <div key={msg.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", gap: 8, alignItems: "flex-end" }}>
-                      {/* Other person avatar */}
                       {!mine && (
                         <div style={{
                           width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
@@ -219,35 +249,21 @@ export default function ChatPage() {
                           {initials(other?.full_name ?? null)}
                         </div>
                       )}
-
-                      {/* Bubble */}
                       <div style={{ maxWidth: "72%" }}>
                         <div style={{
                           padding: "10px 14px",
                           borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                          background: mine
-                            ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
-                            : "#1e2235",
+                          background: mine ? "linear-gradient(135deg, #4f46e5, #7c3aed)" : "#1e2235",
                           border: mine ? "none" : "1px solid rgba(99,102,241,0.15)",
-                          color: "#f0f2fc",
-                          fontSize: 13,
-                          lineHeight: 1.6,
-                          wordBreak: "break-word",
+                          color: "var(--text-primary)", fontSize: 13, lineHeight: 1.6, wordBreak: "break-word",
                           boxShadow: mine ? "0 4px 16px rgba(79,70,229,0.25)" : "none",
                         }}>
                           {msg.body}
                         </div>
-                        <p style={{
-                          fontSize: 10, marginTop: 4,
-                          color: "#334155",
-                          textAlign: mine ? "right" : "left",
-                          fontFamily: "'IBM Plex Mono', monospace",
-                        }}>
+                        <p style={{ fontSize: 10, marginTop: 4, color: "#334155", textAlign: mine ? "right" : "left", fontFamily: "'IBM Plex Mono', monospace" }}>
                           {fmtTime(msg.created_at)}
                         </p>
                       </div>
-
-                      {/* My avatar */}
                       {mine && (
                         <div style={{
                           width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
@@ -266,8 +282,18 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Divider */}
           <div style={{ height: 1, background: "rgba(99,102,241,0.12)" }} />
+
+          {/* Warning banner */}
+          {blocked && (
+            <div style={{
+              padding: "10px 16px", background: "rgba(229,90,110,0.1)",
+              borderBottom: "1px solid rgba(229,90,110,0.2)",
+              fontSize: 13, color: "#f0a0a0", textAlign: "center",
+            }}>
+              Your message was flagged or blocked for inappropriate content. Repeated violations will result in account suspension.
+            </div>
+          )}
 
           {/* Input area */}
           <div style={{ padding: "14px 16px" }}>
@@ -278,38 +304,23 @@ export default function ChatPage() {
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder="Type a message..."
                 style={{
-                  flex: 1,
-                  background: "#1e2235",
+                  flex: 1, background: "#1e2235",
                   border: "1px solid rgba(99,102,241,0.25)",
-                  borderRadius: 12,
-                  padding: "11px 16px",
-                  color: "#f0f2fc",
-                  fontSize: 13,
-                  outline: "none",
-                  fontFamily: "inherit",
-                  WebkitTextFillColor: "#f0f2fc",
+                  borderRadius: 12, padding: "11px 16px",
+                  color: "var(--text-primary)", fontSize: 13, outline: "none",
+                  fontFamily: "inherit", WebkitTextFillColor: "var(--text-primary)",
                 }}
               />
               <button
                 onClick={send}
                 disabled={sending || !body.trim()}
                 style={{
-                  background: sending || !body.trim()
-                    ? "rgba(79,70,229,0.3)"
-                    : "linear-gradient(135deg, #4f46e5, #7c3aed)",
-                  border: "none",
-                  borderRadius: 12,
-                  padding: "11px 20px",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
+                  background: sending || !body.trim() ? "rgba(79,70,229,0.3)" : "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  border: "none", borderRadius: 12, padding: "11px 20px",
+                  color: "#fff", fontSize: 13, fontWeight: 700,
                   cursor: sending || !body.trim() ? "not-allowed" : "pointer",
-                  transition: "all 0.15s",
-                  fontFamily: "inherit",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  flexShrink: 0,
+                  fontFamily: "inherit", display: "flex", alignItems: "center",
+                  gap: 6, flexShrink: 0,
                   boxShadow: !body.trim() ? "none" : "0 4px 16px rgba(79,70,229,0.3)",
                 }}
               >

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { requireCredits } from "@/lib/require-credits";
 
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -8,20 +9,18 @@ const client = new OpenAI({
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Credit gate — blocks if no credits ──
+    const gate = await requireCredits();
+    if (gate.error) return gate.error;
+
     const { image, question } = await req.json();
 
     if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "OPENROUTER_API_KEY is missing in .env.local" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "OPENROUTER_API_KEY is missing in .env.local" }, { status: 500 });
     }
 
     if (!image || !question) {
-      return NextResponse.json(
-        { error: "image and question are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "image and question are required" }, { status: 400 });
     }
 
     const response = await client.chat.completions.create({
@@ -44,12 +43,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Multimodal error:", error?.message || error);
     return NextResponse.json(
-      {
-        error:
-          error?.error?.message ||
-          error?.message ||
-          "Multimodal request failed",
-      },
+      { error: error?.error?.message || error?.message || "Multimodal request failed" },
       { status: 500 }
     );
   }
