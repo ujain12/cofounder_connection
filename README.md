@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bank Statement → QuickBooks Converter
 
-## Getting Started
+Streamlit app that converts any bank statement PDF into QuickBooks-ready Excel/CSV using Google Gemini Flash (free).
 
-First, run the development server:
+## Local Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pip install -r requirements.txt
+# macOS: brew install poppler | Ubuntu: sudo apt install poppler-utils
+streamlit run app.py
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy to Streamlit Community Cloud (Free)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Step 1: Push to GitHub
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+git init
+git add .
+git commit -m "bank statement converter"
+git remote add origin https://github.com/YOUR_USERNAME/bank-statement-converter.git
+git branch -M main
+git push -u origin main
+```
 
-## Learn More
+### Step 2: Deploy on Streamlit Cloud
 
-To learn more about Next.js, take a look at the following resources:
+1. Go to [share.streamlit.io](https://share.streamlit.io)
+2. Sign in with GitHub
+3. Click **New app**
+4. Select your repo → branch `main` → file `app.py`
+5. Click **Deploy**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+That's it. Streamlit Cloud auto-installs `requirements.txt` (Python) and `packages.txt` (system deps like poppler-utils).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Step 3: Get Gemini API Key
 
-## Deploy on Vercel
+1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Click **Create API Key**
+3. Paste it into the app sidebar
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Free tier gives you 15 requests/min and 1M tokens/day — plenty for personal use.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## How It Works
+
+1. PDF uploaded → `pdfplumber` tries text extraction
+2. If scanned (no text), pages are rasterized to images via `pdftoppm`
+3. Text or images sent to Gemini Flash for structured transaction parsing
+4. Output: QuickBooks-compatible Excel/CSV with Date, Description, Amount columns
