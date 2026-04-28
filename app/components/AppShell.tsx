@@ -6,16 +6,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useMemo, useEffect, useState } from "react";
 
-/* ─────────────────────────────────────────────────────────
-   Navigation config
-───────────────────────────────────────────────────────── */
 const NAV_GROUPS = [
   {
     label: "Discover",
     items: [
       { href: "/home",     label: "Home",       icon: HomeIcon    },
       { href: "/matches",  label: "Matches",    icon: PeopleIcon  },
-      { href: "/requests", label: "Requests",   icon: BellIcon, badge: 2 },
+      { href: "/requests", label: "Requests",   icon: BellIcon    },
     ],
   },
   {
@@ -23,21 +20,15 @@ const NAV_GROUPS = [
     items: [
       { href: "/workspace", label: "Workspace",     icon: GridIcon   },
       { href: "/profile",   label: "My Profile",    icon: UserIcon   },
-      { href: "/ai",        label: "Profile Tools", icon: ToolsIcon  },
+      { href: "/ai",        label: "AI Tools",      icon: ToolsIcon  },
     ],
   },
 ];
 
-/* ─────────────────────────────────────────────────────────
-   Types
-───────────────────────────────────────────────────────── */
 interface AppShellProps {
   children: React.ReactNode;
-  /** Optional eyebrow text above the page title */
   eyebrow?: string;
-  /** Optional large page title rendered above children */
   title?: string;
-  /** Optional subtitle below the title */
   subtitle?: string;
 }
 
@@ -47,9 +38,6 @@ interface UserProfile {
   stage?: string | null;
 }
 
-/* ─────────────────────────────────────────────────────────
-   Shell
-───────────────────────────────────────────────────────── */
 export default function AppShell({ children, eyebrow, title, subtitle }: AppShellProps) {
   const pathname  = usePathname();
   const router    = useRouter();
@@ -57,8 +45,8 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [initials, setInitials] = useState("··");
+  const [requestCount, setRequestCount] = useState(0);
 
-  /* Load the current user's name for the sidebar chip */
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -79,6 +67,14 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
             : parts[0].slice(0, 2).toUpperCase()
         );
       }
+
+      // Get real pending request count
+      const { count } = await supabase
+        .from("matches")
+        .select("id", { count: "exact", head: true })
+        .eq("candidate_id", user.id)
+        .eq("status", "pending");
+      setRequestCount(count ?? 0);
     })();
   }, [supabase]);
 
@@ -87,7 +83,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
     router.push("/");
   }
 
-  /* pathname match — handles nested routes like /workspace/tasks */
   const isActive = (href: string) =>
     href === "/home"
       ? pathname === "/home"
@@ -96,10 +91,8 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
 
-      {/* ── Sidebar ── */}
       <nav className="nav-sidebar">
 
-        {/* Logo */}
         <div className="nav-logo-wrap">
           <Link href="/home" style={{ textDecoration: "none" }}>
             <Image
@@ -114,7 +107,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
           <p className="nav-tagline">Find your perfect cofounder</p>
         </div>
 
-        {/* Nav links */}
         <div className="nav-body">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
@@ -127,8 +119,8 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
                 >
                   <item.icon className="nav-icon" />
                   <span>{item.label}</span>
-                  {item.badge ? (
-                    <span className="nav-badge">{item.badge}</span>
+                  {item.label === "Requests" && requestCount > 0 ? (
+                    <span className="nav-badge">{requestCount}</span>
                   ) : null}
                 </Link>
               ))}
@@ -136,7 +128,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
           ))}
         </div>
 
-        {/* Footer — user chip + sign out */}
         <div className="nav-footer">
           {profile && (
             <div className="nav-user-chip">
@@ -159,7 +150,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
         </div>
       </nav>
 
-      {/* ── Main ── */}
       <main className="main-content" style={{ flex: 1 }}>
         {(eyebrow || title || subtitle) && (
           <div style={{ marginBottom: 30 }} className="anim-up">
@@ -169,7 +159,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
           </div>
         )}
 
-        {/* Key on pathname so page transitions fire on route changes */}
         <div className="anim-up" key={pathname} style={{ animationDelay: "0.04s" }}>
           {children}
         </div>
@@ -178,9 +167,6 @@ export default function AppShell({ children, eyebrow, title, subtitle }: AppShel
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Icon components — clean line style, strokeWidth 1.6–2
-───────────────────────────────────────────────────────── */
 function HomeIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
